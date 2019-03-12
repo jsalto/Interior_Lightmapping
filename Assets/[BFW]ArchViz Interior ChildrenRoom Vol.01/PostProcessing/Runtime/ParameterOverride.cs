@@ -142,6 +142,11 @@ namespace UnityEngine.Rendering.PostProcessing
             value.b = from.b + (to.b - from.b) * t;
             value.a = from.a + (to.a - from.a) * t;
         }
+
+        public static implicit operator Vector4(ColorParameter prop)
+        {
+            return prop.value;
+        }
     }
 
     [Serializable]
@@ -151,6 +156,16 @@ namespace UnityEngine.Rendering.PostProcessing
         {
             value.x = from.x + (to.x - from.x) * t;
             value.y = from.y + (to.y - from.y) * t;
+        }
+
+        public static implicit operator Vector3(Vector2Parameter prop)
+        {
+            return prop.value;
+        }
+
+        public static implicit operator Vector4(Vector2Parameter prop)
+        {
+            return prop.value;
         }
     }
 
@@ -162,6 +177,16 @@ namespace UnityEngine.Rendering.PostProcessing
             value.x = from.x + (to.x - from.x) * t;
             value.y = from.y + (to.y - from.y) * t;
             value.z = from.z + (to.z - from.z) * t;
+        }
+
+        public static implicit operator Vector2(Vector3Parameter prop)
+        {
+            return prop.value;
+        }
+
+        public static implicit operator Vector4(Vector3Parameter prop)
+        {
+            return prop.value;
         }
     }
 
@@ -175,6 +200,16 @@ namespace UnityEngine.Rendering.PostProcessing
             value.z = from.z + (to.z - from.z) * t;
             value.w = from.w + (to.w - from.w) * t;
         }
+
+        public static implicit operator Vector2(Vector4Parameter prop)
+        {
+            return prop.value;
+        }
+
+        public static implicit operator Vector3(Vector4Parameter prop)
+        {
+            return prop.value;
+        }
     }
 
     [Serializable]
@@ -186,16 +221,23 @@ namespace UnityEngine.Rendering.PostProcessing
                 value.Cache(int.MinValue);
         }
 
+        internal override void SetValue(ParameterOverride parameter)
+        {
+            base.SetValue(parameter);
+
+            if (value != null)
+                value.Cache(Time.renderedFrameCount);
+        }
+
         public override void Interp(Spline from, Spline to, float t)
         {
-            int frameCount = Time.renderedFrameCount;
-
             if (from == null || to == null)
             {
                 base.Interp(from, to, t);
                 return;
             }
-
+            
+            int frameCount = Time.renderedFrameCount;
             from.Cache(frameCount);
             to.Cache(frameCount);
 
@@ -208,18 +250,81 @@ namespace UnityEngine.Rendering.PostProcessing
         }
     }
 
+    public enum TextureParameterDefault
+    {
+        None,
+        Black,
+        White,
+        Transparent,
+        Lut2D
+    }
+
     [Serializable]
     public sealed class TextureParameter : ParameterOverride<Texture>
     {
+        public TextureParameterDefault defaultState = TextureParameterDefault.Black;
+
         public override void Interp(Texture from, Texture to, float t)
         {
-            if (from == null || to == null)
+            // Both are null, do nothing
+            if (from == null && to == null)
             {
-                base.Interp(from, to, t);
+                value = null;
                 return;
             }
 
-            value = TextureLerper.instance.Lerp(from, to, t);
+            // Both aren't null we're ready to blend
+            if (from != null && to != null)
+            {
+                value = TextureLerper.instance.Lerp(from, to, t);
+                return;
+            }
+
+            // One of them is null, blend to/from a default value is applicable
+            {
+                Texture defaultTexture;
+
+                bool is3d = false;
+                if(to != null)
+                    is3d = to is Texture3D
+                            || (to is RenderTexture && ((RenderTexture)to).volumeDepth > 1);
+                else
+                    is3d = from is Texture3D
+                            || (from is RenderTexture && ((RenderTexture)from).volumeDepth > 1);
+
+                switch (defaultState)
+                {
+                    case TextureParameterDefault.Black:
+                        defaultTexture = is3d ? (Texture)RuntimeUtilities.blackTexture3D : RuntimeUtilities.blackTexture;
+                        break;
+                    case TextureParameterDefault.White:
+                        defaultTexture = is3d ? (Texture)RuntimeUtilities.whiteTexture3D : RuntimeUtilities.whiteTexture;
+                        break;
+                    case TextureParameterDefault.Transparent:
+                        defaultTexture = is3d ? (Texture)RuntimeUtilities.transparentTexture3D : RuntimeUtilities.transparentTexture;
+                        break;
+                    case TextureParameterDefault.Lut2D:
+                        // Find the current lut size
+                        int size = from != null ? from.height : to.height;
+                        defaultTexture = RuntimeUtilities.GetLutStrip(size);
+                        break;
+                    default:
+                        defaultTexture = null;
+                        break;
+                }
+
+                if (from == null) from = defaultTexture;
+                if (to == null) to = defaultTexture;
+
+                // defaultState could have been explicitly set to None
+                if (from == null || to == null)
+                {
+                    base.Interp(from, to, t);
+                    return;
+                }
+
+                value = TextureLerper.instance.Lerp(from, to, t);
+            }
         }
     }
 }

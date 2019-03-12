@@ -35,7 +35,7 @@ namespace UnityEngine.Rendering.PostProcessing
                 && SystemInfo.graphicsShaderLevel >= 35;
         }
     }
-    
+
     // TODO: Look into minimum blur amount in the distance, right now it's lerped until a point
     // TODO: Doesn't play nice with alpha propagation, see if it can be fixed without killing performances
     public sealed class DepthOfFieldRenderer : PostProcessEffectRenderer<DepthOfField>
@@ -81,10 +81,10 @@ namespace UnityEngine.Rendering.PostProcessing
 
         RenderTextureFormat SelectFormat(RenderTextureFormat primary, RenderTextureFormat secondary)
         {
-            if (SystemInfo.SupportsRenderTextureFormat(primary))
+            if (primary.IsSupported())
                 return primary;
 
-            if (SystemInfo.SupportsRenderTextureFormat(secondary))
+            if (secondary.IsSupported())
                 return secondary;
 
             return RenderTextureFormat.Default;
@@ -132,10 +132,11 @@ namespace UnityEngine.Rendering.PostProcessing
             #endif
 
             // Material setup
+            float scaledFilmHeight = k_FilmHeight * (context.height / 1080f);
             var f = settings.focalLength.value / 1000f;
             var s1 = Mathf.Max(settings.focusDistance.value, f);
             var aspect = (float)context.screenWidth / (float)context.screenHeight;
-            var coeff = f * f / (settings.aperture.value * (s1 - f) * k_FilmHeight * 2);
+            var coeff = f * f / (settings.aperture.value * (s1 - f) * scaledFilmHeight * 2f);
             var maxCoC = CalculateMaxCoCRadius(context.screenHeight);
 
             var sheet = context.propertySheets.Get(context.resources.shaders.depthOfField);
@@ -159,7 +160,7 @@ namespace UnityEngine.Rendering.PostProcessing
                 float motionBlending = context.temporalAntialiasing.motionBlending;
                 float blend = m_ResetHistory ? 0f : motionBlending; // Handles first frame blending
                 var jitter = context.temporalAntialiasing.jitter;
-                
+
                 sheet.properties.SetVector(ShaderIDs.TaaParams, new Vector3(jitter.x, jitter.y, blend));
 
                 int pp = m_HistoryPingPong[context.xrActiveEye];

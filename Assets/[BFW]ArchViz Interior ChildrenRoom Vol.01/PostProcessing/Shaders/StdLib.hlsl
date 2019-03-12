@@ -1,4 +1,4 @@
-// Because this framework is supposed to work with the legacy render pipelines AND scriptable render
+﻿// Because this framework is supposed to work with the legacy render pipelines AND scriptable render
 // pipelines we can't use Unity's shader libraries (some scriptable pipelines come with their own
 // shader lib). So here goes a minimal shader lib only used for post-processing to ensure good
 // compatibility with all pipelines.
@@ -19,18 +19,27 @@
     #include "API/D3D12.hlsl"
 #elif defined(SHADER_API_D3D9) || defined(SHADER_API_D3D11_9X)
     #include "API/D3D9.hlsl"
-#elif defined(SHADER_API_VULKAN) || defined(SHADER_API_SWITCH)
+#elif defined(SHADER_API_VULKAN)
     #include "API/Vulkan.hlsl"
+#elif defined(SHADER_API_SWITCH)
+    #include "API/Switch.hlsl"
 #elif defined(SHADER_API_METAL)
     #include "API/Metal.hlsl"
+#elif defined(SHADER_API_PSP2)
+    #include "API/PSP2.hlsl"
 #else
     #include "API/OpenGL.hlsl"
+#endif
+
+#if defined(SHADER_API_PSSL) || defined(SHADER_API_XBOXONE) || defined(SHADER_API_SWITCH) || defined(SHADER_API_PSP2)
+    #define SHADER_API_CONSOLE
 #endif
 
 // -----------------------------------------------------------------------------
 // Constants
 
-#define HALF_MAX        65504.0
+#define HALF_MAX        65504.0 // (2 - 2^-10) * 2^15
+#define HALF_MAX_MINUS1 65472.0 // (2 - 2^-9) * 2^15
 #define EPSILON         1.0e-4
 #define PI              3.14159265359
 #define TWO_PI          6.28318530718
@@ -147,40 +156,28 @@ float4 PositivePow(float4 base, float4 power)
 }
 
 // NaN checker
+// /Gic isn't enabled on fxc so we can't rely on isnan() anymore
 bool IsNan(float x)
 {
-#if !defined(SHADER_API_GLES)
-    return isnan(x) || isinf(x);
-#else
-    return (x <= 0.0 || 0.0 <= x) ? false : true;
-#endif
+    // For some reason the following tests outputs "internal compiler error" randomly on desktop
+    // so we'll use a safer but slightly slower version instead :/
+    //return (x <= 0.0 || 0.0 <= x) ? false : true;
+    return (x < 0.0 || x > 0.0 || x == 0.0) ? false : true;
 }
 
 bool AnyIsNan(float2 x)
 {
-#if !defined(SHADER_API_GLES)
-    return any(isnan(x)) || any(isinf(x));
-#else
     return IsNan(x.x) || IsNan(x.y);
-#endif
 }
 
 bool AnyIsNan(float3 x)
 {
-#if !defined(SHADER_API_GLES)
-    return any(isnan(x)) || any(isinf(x));
-#else
     return IsNan(x.x) || IsNan(x.y) || IsNan(x.z);
-#endif
 }
 
 bool AnyIsNan(float4 x)
 {
-#if !defined(SHADER_API_GLES)
-    return any(isnan(x)) || any(isinf(x));
-#else
     return IsNan(x.x) || IsNan(x.y) || IsNan(x.z) || IsNan(x.w);
-#endif
 }
 
 // -----------------------------------------------------------------------------
@@ -290,11 +287,13 @@ VaryingsDefault VertDefault(AttributesDefault v)
     return o;
 }
 
-VaryingsDefault VertDefaultNoFlip(AttributesDefault v)
+float4 _UVTransform; // xy: scale, wz: translate
+
+VaryingsDefault VertUVTransform(AttributesDefault v)
 {
     VaryingsDefault o;
     o.vertex = float4(v.vertex.xy, 0.0, 1.0);
-    o.texcoord = TransformTriangleVertexToUV(v.vertex.xy);
+    o.texcoord = TransformTriangleVertexToUV(v.vertex.xy) * _UVTransform.xy + _UVTransform.zw;
     o.texcoordStereo = TransformStereoScreenSpaceTex(o.texcoord, 1.0);
     return o;
 }

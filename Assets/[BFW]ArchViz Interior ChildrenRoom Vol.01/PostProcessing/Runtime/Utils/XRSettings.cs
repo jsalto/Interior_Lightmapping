@@ -1,8 +1,12 @@
-// Small shim for VRSettings/XRSettings on XboxOne and Switch
-#if !UNITY_2018_2_OR_NEWER && (UNITY_XBOXONE || UNITY_SWITCH) && !UNITY_EDITOR
+// Small shim for VRSettings/XRSettings on XboxOne, Switch and PS Vita
+#if (UNITY_XBOXONE || UNITY_SWITCH || UNITY_PSP2) && !UNITY_EDITOR
 using System;
 
+#if UNITY_2017_2_OR_NEWER
 namespace UnityEngine.XR
+#else
+namespace UnityEngine.VR
+#endif
 {
 #if UNITY_2017_2_OR_NEWER
     public static class XRSettings

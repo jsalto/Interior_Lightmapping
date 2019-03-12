@@ -6,6 +6,10 @@ using System.Reflection;
 using System.Text;
 using UnityEngine.Assertions;
 
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
+
 namespace UnityEngine.Rendering.PostProcessing
 {
     using SceneManagement;
@@ -22,12 +26,27 @@ namespace UnityEngine.Rendering.PostProcessing
             {
                 if (m_WhiteTexture == null)
                 {
-                    m_WhiteTexture = new Texture2D(1, 1, TextureFormat.ARGB32, false);
+                    m_WhiteTexture = new Texture2D(1, 1, TextureFormat.ARGB32, false) { name = "White Texture" };
                     m_WhiteTexture.SetPixel(0, 0, Color.white);
                     m_WhiteTexture.Apply();
                 }
 
                 return m_WhiteTexture;
+            }
+        }
+        static Texture3D m_WhiteTexture3D;
+        public static Texture3D whiteTexture3D
+        {
+            get
+            {
+                if (m_WhiteTexture3D == null)
+                {
+                    m_WhiteTexture3D = new Texture3D(1, 1, 1, TextureFormat.ARGB32, false) { name = "White Texture 3D" };
+                    m_WhiteTexture3D.SetPixels(new Color[] { Color.white });
+                    m_WhiteTexture3D.Apply();
+                }
+
+                return m_WhiteTexture3D;
             }
         }
 
@@ -38,12 +57,28 @@ namespace UnityEngine.Rendering.PostProcessing
             {
                 if (m_BlackTexture == null)
                 {
-                    m_BlackTexture = new Texture2D(1, 1, TextureFormat.ARGB32, false);
+                    m_BlackTexture = new Texture2D(1, 1, TextureFormat.ARGB32, false) { name = "Black Texture" };
                     m_BlackTexture.SetPixel(0, 0, Color.black);
                     m_BlackTexture.Apply();
                 }
 
                 return m_BlackTexture;
+            }
+        }
+
+        static Texture3D m_BlackTexture3D;
+        public static Texture3D blackTexture3D
+        {
+            get
+            {
+                if (m_BlackTexture3D == null)
+                {
+                    m_BlackTexture3D = new Texture3D(1, 1, 1, TextureFormat.ARGB32, false) { name = "Black Texture 3D" };
+                    m_BlackTexture3D.SetPixels(new Color[] { Color.black });
+                    m_BlackTexture3D.Apply();
+                }
+
+                return m_BlackTexture3D;
             }
         }
 
@@ -54,13 +89,78 @@ namespace UnityEngine.Rendering.PostProcessing
             {
                 if (m_TransparentTexture == null)
                 {
-                    m_TransparentTexture = new Texture2D(1, 1, TextureFormat.ARGB32, false);
+                    m_TransparentTexture = new Texture2D(1, 1, TextureFormat.ARGB32, false) { name = "Transparent Texture" };
                     m_TransparentTexture.SetPixel(0, 0, Color.clear);
                     m_TransparentTexture.Apply();
                 }
 
                 return m_TransparentTexture;
             }
+        }
+
+        static Texture3D m_TransparentTexture3D;
+        public static Texture3D transparentTexture3D
+        {
+            get
+            {
+                if (m_TransparentTexture3D == null)
+                {
+                    m_TransparentTexture3D = new Texture3D(1, 1, 1, TextureFormat.ARGB32, false) { name = "Transparent Texture 3D" };
+                    m_TransparentTexture3D.SetPixels(new Color[] { Color.clear });
+                    m_TransparentTexture3D.Apply();
+                }
+
+                return m_TransparentTexture3D;
+            }
+        }
+
+        static Dictionary<int, Texture2D> m_LutStrips = new Dictionary<int, Texture2D>();
+
+        public static Texture2D GetLutStrip(int size)
+        {
+            Texture2D texture;
+            if (!m_LutStrips.TryGetValue(size, out texture))
+            {
+                int width = size * size;
+                int height = size;
+                var pixels = new Color[width * height];
+                float inv = 1f / (size - 1f);
+
+                for (int z = 0; z < size; z++)
+                {
+                    var offset = z * size;
+                    var b = z * inv;
+
+                    for (int y = 0; y < size; y++)
+                    {
+                        var g = y * inv;
+
+                        for (int x = 0; x < size; x++)
+                        {
+                            var r = x * inv;
+                            pixels[y * width + offset + x] = new Color(r, g, b);
+                        }
+                    }
+                }
+
+                var format = TextureFormat.RGBAHalf;
+                if (!format.IsSupported())
+                    format = TextureFormat.ARGB32;
+                    
+                texture = new Texture2D(size * size, size, format, false, true)
+                {
+                    name = "Strip Lut" + size,
+                    hideFlags = HideFlags.DontSave,
+                    filterMode = FilterMode.Bilinear,
+                    wrapMode = TextureWrapMode.Clamp,
+                    anisoLevel = 0
+                };
+                texture.SetPixels(pixels);
+                texture.Apply();
+                m_LutStrips.Add(size, texture);
+            }
+
+            return texture;
         }
 
         #endregion
@@ -142,12 +242,31 @@ namespace UnityEngine.Rendering.PostProcessing
             }
         }
 
+        public static void SetRenderTargetWithLoadStoreAction(this CommandBuffer cmd, RenderTargetIdentifier rt, RenderBufferLoadAction loadAction, RenderBufferStoreAction storeAction)
+        {
+            #if UNITY_2018_2_OR_NEWER
+            cmd.SetRenderTarget(rt, loadAction, storeAction);
+            #else
+            cmd.SetRenderTarget(rt);
+            #endif
+        }
+        public static void SetRenderTargetWithLoadStoreAction(this CommandBuffer cmd,
+            RenderTargetIdentifier color, RenderBufferLoadAction colorLoadAction, RenderBufferStoreAction colorStoreAction,
+            RenderTargetIdentifier depth, RenderBufferLoadAction depthLoadAction, RenderBufferStoreAction depthStoreAction)
+        {
+            #if UNITY_2018_2_OR_NEWER
+            cmd.SetRenderTarget(color, colorLoadAction, colorStoreAction, depth, depthLoadAction, depthStoreAction);
+            #else
+            cmd.SetRenderTarget(color, depth);
+            #endif
+        }
+
         // Use a custom blit method to draw a fullscreen triangle instead of a fullscreen quad
         // https://michaldrobot.com/2014/04/01/gcn-execution-patterns-in-full-screen-passes/
         public static void BlitFullscreenTriangle(this CommandBuffer cmd, RenderTargetIdentifier source, RenderTargetIdentifier destination, bool clear = false)
         {
             cmd.SetGlobalTexture(ShaderIDs.MainTex, source);
-            cmd.SetRenderTarget(destination);
+            cmd.SetRenderTargetWithLoadStoreAction(destination, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store);
 
             if (clear)
                 cmd.ClearRenderTarget(true, true, Color.clear);
@@ -158,7 +277,7 @@ namespace UnityEngine.Rendering.PostProcessing
         public static void BlitFullscreenTriangle(this CommandBuffer cmd, RenderTargetIdentifier source, RenderTargetIdentifier destination, PropertySheet propertySheet, int pass, bool clear = false)
         {
             cmd.SetGlobalTexture(ShaderIDs.MainTex, source);
-            cmd.SetRenderTarget(destination);
+            cmd.SetRenderTargetWithLoadStoreAction(destination, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store);
 
             if (clear)
                 cmd.ClearRenderTarget(true, true, Color.clear);
@@ -169,10 +288,18 @@ namespace UnityEngine.Rendering.PostProcessing
         public static void BlitFullscreenTriangle(this CommandBuffer cmd, RenderTargetIdentifier source, RenderTargetIdentifier destination, RenderTargetIdentifier depth, PropertySheet propertySheet, int pass, bool clear = false)
         {
             cmd.SetGlobalTexture(ShaderIDs.MainTex, source);
-            cmd.SetRenderTarget(destination, depth);
-
+            
             if (clear)
+            {
+                cmd.SetRenderTargetWithLoadStoreAction(destination, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store,
+                                                       depth, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store);
                 cmd.ClearRenderTarget(true, true, Color.clear);
+            }
+            else
+            {
+                cmd.SetRenderTargetWithLoadStoreAction(destination, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store,
+                                                       depth, RenderBufferLoadAction.Load, RenderBufferStoreAction.Store);
+            }
 
             cmd.DrawMesh(fullscreenTriangle, Matrix4x4.identity, propertySheet.material, 0, pass, propertySheet.properties);
         }
@@ -196,9 +323,30 @@ namespace UnityEngine.Rendering.PostProcessing
             if (source != null)
                 material.SetTexture(ShaderIDs.MainTex, source);
 
+            if (destination != null)
+                destination.DiscardContents(true, false);
+
             Graphics.SetRenderTarget(destination);
             Graphics.DrawMeshNow(fullscreenTriangle, Matrix4x4.identity);
             RenderTexture.active = oldRt;
+        }
+
+        public static void BuiltinBlit(this CommandBuffer cmd, Rendering.RenderTargetIdentifier source, Rendering.RenderTargetIdentifier dest)
+        {
+            #if UNITY_2018_2_OR_NEWER
+            cmd.SetRenderTarget(dest, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store);
+            dest = BuiltinRenderTextureType.CurrentActive;
+            #endif
+            cmd.Blit(source, dest);
+        }
+
+        public static void BuiltinBlit(this CommandBuffer cmd, Rendering.RenderTargetIdentifier source, Rendering.RenderTargetIdentifier dest, Material mat, int pass = 0)
+        {
+            #if UNITY_2018_2_OR_NEWER
+            cmd.SetRenderTarget(dest, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store);
+            dest = BuiltinRenderTextureType.CurrentActive;
+            #endif
+            cmd.Blit(source, dest, mat, pass);
         }
 
         // Fast basic copy texture if available, falls back to blit copy if not
@@ -226,6 +374,16 @@ namespace UnityEngine.Rendering.PostProcessing
             get { return GraphicsSettings.renderPipelineAsset != null; } // 5.6+ only
         }
 
+        public static bool supportsDeferredShading
+        {
+            get { return scriptableRenderPipelineActive || GraphicsSettings.GetShaderMode(BuiltinShaderType.DeferredShading) != BuiltinShaderMode.Disabled; }
+        }
+
+        public static bool supportsDepthNormals
+        {
+            get { return scriptableRenderPipelineActive || GraphicsSettings.GetShaderMode(BuiltinShaderType.DepthNormals) != BuiltinShaderMode.Disabled; }
+        }
+
 #if UNITY_EDITOR
         public static bool isSinglePassStereoSelected
         {
@@ -244,6 +402,8 @@ namespace UnityEngine.Rendering.PostProcessing
             {
 #if UNITY_EDITOR
                 return isSinglePassStereoSelected && Application.isPlaying;
+#elif UNITY_SWITCH
+                return false;
 #elif UNITY_2017_2_OR_NEWER
                 return UnityEngine.XR.XRSettings.eyeTextureDesc.vrUsage == VRTextureUsage.TwoEyes;
 #else
@@ -258,7 +418,7 @@ namespace UnityEngine.Rendering.PostProcessing
             {
 #if UNITY_EDITOR
                 return UnityEditor.PlayerSettings.virtualRealitySupported;
-#elif UNITY_XBOXONE
+#elif UNITY_XBOXONE || UNITY_SWITCH
                 return false;
 #elif UNITY_2017_2_OR_NEWER
                 return UnityEngine.XR.XRSettings.enabled;
@@ -271,6 +431,32 @@ namespace UnityEngine.Rendering.PostProcessing
         public static bool isAndroidOpenGL
         {
             get { return Application.platform == RuntimePlatform.Android && SystemInfo.graphicsDeviceType != GraphicsDeviceType.Vulkan; }
+        }
+
+        public static RenderTextureFormat defaultHDRRenderTextureFormat
+        {
+            get
+            {
+#if UNITY_ANDROID || UNITY_IPHONE || UNITY_TVOS || UNITY_SWITCH || UNITY_EDITOR
+                RenderTextureFormat format = RenderTextureFormat.RGB111110Float;
+#   if UNITY_EDITOR
+                var target = EditorUserBuildSettings.activeBuildTarget;
+                if (target != BuildTarget.Android && target != BuildTarget.iOS && target != BuildTarget.tvOS && target != BuildTarget.Switch)
+                    return RenderTextureFormat.DefaultHDR;
+#   endif // UNITY_EDITOR
+                if (format.IsSupported())
+                    return format;
+#endif // UNITY_ANDROID || UNITY_IPHONE || UNITY_TVOS || UNITY_SWITCH || UNITY_EDITOR
+                return RenderTextureFormat.DefaultHDR;
+            }
+        }
+
+        public static bool isFloatingPointFormat(RenderTextureFormat format)
+        {
+            return format == RenderTextureFormat.DefaultHDR || format == RenderTextureFormat.ARGBHalf || format == RenderTextureFormat.ARGBFloat ||
+                   format == RenderTextureFormat.RGFloat || format == RenderTextureFormat.RGHalf ||
+                   format == RenderTextureFormat.RFloat || format == RenderTextureFormat.RHalf ||
+                   format == RenderTextureFormat.RGB111110Float;
         }
 
         public static void Destroy(UnityObject obj)
@@ -492,20 +678,27 @@ namespace UnityEngine.Rendering.PostProcessing
 
         #region Reflection
 
+        static IEnumerable<Type> m_AssemblyTypes;
+
         public static IEnumerable<Type> GetAllAssemblyTypes()
         {
-            return AppDomain.CurrentDomain.GetAssemblies()
-                .SelectMany(t =>
-                {
-                    // Ugly hack to handle mis-versioned dlls
-                    var innerTypes = new Type[0];
-                    try
+            if (m_AssemblyTypes == null)
+            {
+                m_AssemblyTypes = AppDomain.CurrentDomain.GetAssemblies()
+                    .SelectMany(t =>
                     {
-                        innerTypes = t.GetTypes();
-                    }
-                    catch {}
-                    return innerTypes;
-                });
+                        // Ugly hack to handle mis-versioned dlls
+                        var innerTypes = new Type[0];
+                        try
+                        {
+                            innerTypes = t.GetTypes();
+                        }
+                        catch { }
+                        return innerTypes;
+                    });
+            }
+
+            return m_AssemblyTypes;
         }
 
         // Quick extension method to get the first attribute of type T on a given Type

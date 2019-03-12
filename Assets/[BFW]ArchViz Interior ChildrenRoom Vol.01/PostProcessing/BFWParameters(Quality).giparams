@@ -3,7 +3,7 @@
 --- !u!1113 &111300000
 LightmapParameters:
   m_ObjectHideFlags: 0
-  m_PrefabParentObject: {fileID: 0}
+  m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInternal: {fileID: 0}
   m_Name: BFWParameters(Quality)
   serializedVersion: 3
@@ -20,6 +20,6 @@ LightmapParameters:
   directLightQuality: 128
   antiAliasingSamples: 4
   bakedLightmapTag: -1
-  pushoff: 0.0001
+  pushoff: 0.001
   AOQuality: 256
   AOAntiAliasingSamples: 8

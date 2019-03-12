@@ -24,11 +24,15 @@ namespace UnityEngine.Rendering.PostProcessing
                 && intensity.value > 0f;
         }
     }
-    
+
+#if POSTFX_DEBUG_STATIC_GRAIN
+    #pragma warning disable 414
+#endif
+
     public sealed class GrainRenderer : PostProcessEffectRenderer<Grain>
     {
         RenderTexture m_GrainLookupRT;
-        
+
         const int k_SampleCount = 1024;
         int m_SampleIndex;
 
@@ -36,7 +40,7 @@ namespace UnityEngine.Rendering.PostProcessing
         {
 #if POSTFX_DEBUG_STATIC_GRAIN
             // Chosen by a fair dice roll
-            float time = 4f;
+            float time = 0.4f;
             float rndOffsetX = 0f;
             float rndOffsetY = 0f;
 #else
@@ -63,7 +67,7 @@ namespace UnityEngine.Rendering.PostProcessing
 
                 m_GrainLookupRT.Create();
             }
-            
+
             var sheet = context.propertySheets.Get(context.resources.shaders.grainBaker);
             sheet.properties.Clear();
             sheet.properties.SetFloat(ShaderIDs.Phase, time % 10f);
@@ -82,7 +86,7 @@ namespace UnityEngine.Rendering.PostProcessing
 
         RenderTextureFormat GetLookupFormat()
         {
-            if (SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.ARGBHalf))
+            if (RenderTextureFormat.ARGBHalf.IsSupported())
                 return RenderTextureFormat.ARGBHalf;
 
             return RenderTextureFormat.ARGB32;
@@ -95,4 +99,8 @@ namespace UnityEngine.Rendering.PostProcessing
             m_SampleIndex = 0;
         }
     }
+    
+#if POSTFX_DEBUG_STATIC_GRAIN
+    #pragma warning restore 414
+#endif
 }
