@@ -1,2 +1,5 @@
 Library/
 Temp/
+Builds/
+obj/
+.vs/Interior_Lightmapping/v14/.suo

@@ -4,5 +4,8 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes: []
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/Cocina.unity
+    guid: 6b179a0d1ab553a49b779aa776a8a4d9
   m_configObjects: {}
